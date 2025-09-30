@@ -1,0 +1,5324 @@
+globals [
+    ;; seasons ;;
+   season ; conditions of weather, temperature, humidity in different seasons of the year
+
+  ;; soil water retention variables ;;
+   soil_humidity
+   soil_suction ; related to soil humidity
+
+  ;; vegetation variables ;;
+   ntree_num  ; number of patches with trees of naturally green areas
+   nshrub_num ; number of patches with shrubs of naturally green areas
+   nveg_ratio ; ratio of trees over shrubs of naturally green areas
+   fshrub_num ; number of patches with vegetation of fluvial areas
+   utree_num  ; number of patches with trees of urban green areas
+   ushrub_num ; number of patches with shrubs of urban green areas
+   uveg_ratio ; ratio of trees over shrubs of urban green areas
+
+   flora ; IVI, composite index to monitor the diversity and density of flora species
+   veg_cover ; ratio between vegetation elements (vgts) and total area (patches)
+   ideal_veg ; intial IVI at tick 0, estimated at 79.33 for woody plants in urban green spaces by Muthulingam & Thangavel, 2012
+   current_regeneration_rate ; the regeneration rate of every tick, as defined by soil humidity and fertility
+   sfi ; soil fertility index calculated as: SFI= organic C% + pH adjusted from Panwar et al. 2011
+   ideal_sfi ;  soil fertility index for min carbon content 5% and max soil acidity 6.0
+   vegetation   ; composite index to monitor the condition of the flora and the soil fertility
+
+  ;; biodiversity variables ;;
+   flora_diversity ; Shannon's divesity index (H') -Σp*lnp (Morris et al. 2014) at the beginning of the simulation
+   fl_d ; Shannon's divesity index (H') at every tick
+   d_1
+   d_2
+   d_3
+   d_4
+   d_5
+   fauna_diversity ; correlated to flora_diversity and soil quality according to Qian 2007
+   fn_d ; fauna diversity at every tick
+   ideal_biodiversity ; ideal biodiversity value calculated at the begginging of the run
+   biodiversity ; total biodiversity performance index assessed in every tick
+
+  ;; community variables ;;
+   initial_community_index ; density of people attracted by culture and recreation at the beginning of the run
+   community_index ; density of people attracted by culture and recreation in every tick
+   community ; assessed community index (percentage difference form initial state) in every tick
+
+  ;; air quality variables ;;
+   air          ; composite index to monitor the quality of air (cooling + aqii)
+   air_sample ; total patches of atmosphere in contact with NBS area - sample for the assessment
+   cool_patches ; total patches of atmosphere in contact with vegetation agents (vgts)
+   aqii ; composite index Air Quality Impact Index (AQII) by Datta et al. 2021,
+       ;adjusted only for the physical characterisits of plants
+       ;assuming that all examined plants have similar Air Pollution Tolerance Index (API)
+   ideal_aqii ; reference AQII index for the specific NBS
+
+  ;;; ECOSYSYEM SERVICES ;;;
+ regulating ; services that regulate the elements and functions of the examined ecosystem
+   erosion_control_value ;
+   gas_regulation_value ;
+   microclimate_regulation_value ;
+   nutrient_cycling_value ;
+   pollination_value ;
+   refugia_value ;
+   soil_formation_value ;
+   water_regulation_value ;
+   waste_treatment_value ;
+ provisioning ; services that provide additional properties to the examined ecosystem
+   food_production_value ;
+   genetic_resources_value ;
+   raw_materials_value ;
+   water_savings_value ;
+cultural ; services that provide cultural, recreational, aesthetic aspects to the examined ecosystems
+   cultural_use_value ;
+   recreation_value
+]
+
+ ;; BUTTONS, SWITCHES, AND SLIDERS ;;
+
+  ;; NBS Alternatives defined by the City Lab of Prague ;;
+  ; bioswales ; and rain gardens, show size and depths
+  ; green_roofs ; typology of green roof (extensive vs intensive) hybrid green roof and grey water recycling
+  ; green_facades ; dimension and type of green façade
+  ; green_enhancement ;  additional trees and wildflower meadows, different selection and location of trees, area and location of wildflower meadows
+  ; permeable_pavement ;  area, location and materials of permeable pavements,
+
+  ;soil_temperature ; absolute temperature of soil as estimated per season
+  ;NBS_attractiveness ; quantitive estimation of attractiveness of local community to NBS infrastructure
+
+breed [nvgts nvgt]
+breed [uvgts uvgt]
+breed [fvgts fvgt]
+breed [ppls ppl]
+breed [anms anm]
+
+patches-own
+
+[
+  is-natural?  ;whether a patch represents natural green surface
+  is-urban?    ;whether a patch represents urban green surface
+  is-fluvial?  ;whether a patch represents fluvial surface
+  is-agric?    ;whether a patch represents agricultutal surface
+  is-paved?    ;whether a patch represents paved surface
+  is-perm?     ;whether a patch represents a permeable surface
+  atmosphere?  ;whether a patch represents atmospheric volume
+
+; related to cultural / social aspects
+  imp-bld?   ;whether a patch represents an important building such as the library
+
+; related to soil water retention
+  surface      ; composite index of surface characterisitcs (LID BMP parameter)
+               ; storage depth/berm height/barrel height, vegetation volume, surface roughness, surface slope
+  soil         ; composite index of soil characterisitcs (LID BMP parameter)
+               ; wilting point, humidity
+  soil_water_retention ; index combining both the surfance and soil indices
+  surface_roughness; 0.1 for soil and different vegetation roughness
+  ideal_roughness; 0.1 for RG
+  vegetation_volume ; average size of vegetation agents in radius 3 of the examined patch
+  ideal_vegetation_volume ;5/100 for RG
+  ideal_soil_humidity; 0.32 /32% for normal clay (Minnesota Stormwater Manual, 2022)
+  s_h; soil humidity of patches
+  max_soil_humidity; 0.45 for average normal clay
+  wilting_point; 0.20 minimum amount of water in the soil that the plant requires not to wilt
+  min_wilting_point; 0.15 for normal clay (Minnesota Stormwater Manual, 2022)
+  ideal_soil_suction ; max soil suction for 32% relative humidity in 25oC
+
+ ; related to vegetation
+  organic_content; percnetage of organic material in soil, necessary for the vegetation
+
+ ; related to air quality - cooling due to shading and evapotranspiration and reduction of the pollution levels
+  cooling    ; percentage of air patches with reduced temperature * mean temperature reduction
+  cool_dif ; absolute mean temperature difference during daytime determined by Kim et al. 2024
+  air_temperature ; temperature of patches of air
+]
+
+turtles-own
+[
+  aqii_habit ; subindex of tree habit, based on plant's appearance, growth form and architecture
+  aqii_canopy ; density of canopy structure: sparse-semidense-dense
+  aqii_leaf ; Leaf Area Index (LAI) for each species
+
+  original_size ; the reference size of vegetation agents at the beginning of the run
+]
+
+
+to setup
+  clear-all
+  import-pcolors "Dejvice map.png"
+  setup-model
+  setup-vegetation
+  setup-soil-water-retention
+  setup-community
+  setup-biodiversity
+  setup-NBS_alternatives
+
+  reset-ticks
+
+end
+
+to go
+  assess-soil-water-retention
+  assess-vegetation
+  assess-biodiversity
+  assess-community
+  assess-air
+  assess-ES
+  if heatwave?
+     [heatwave
+      recover_heatwave]
+
+  tick
+
+  if ticks >= 10
+    [stop]
+
+end
+
+;;; SETUP PROCEDURES ;;;  SETUP PROCEDURES ;;;  SETUP PROCEDURES ;;;
+
+to setup-model
+
+  ask patches
+    [set is-natural? false
+     set is-urban? false
+     set is-fluvial? false
+     set is-paved? false
+     set is-perm? false
+     set atmosphere? false ]
+
+;; setup buildings
+  ask patches with [pcolor > 6 and pcolor < 9]
+    [set pcolor grey
+     set is-paved? true
+      ask patches with [pxcor = [pxcor] of myself and pycor = [pycor] of myself and pzcor < 3]
+         [set pcolor grey
+          set is-paved? true]]
+
+ask (patch-set patch -22 10 1 patch -23 10 1 patch -24 10 1
+               patch -21 9 1 patch -22 9 1 patch -23 9 1 patch -24 9 1 patch -25 9 1
+               patch -20 8 1 patch -21 8 1 patch -22 8 1 patch -23 8 1 patch -24 8 1 patch -25 8 1 patch -26 8 1
+               patch -20 7 1 patch -21 7 1 patch -22 7 1 patch -23 7 1 patch -24 7 1 patch -25 7 1 patch -26 7 1 patch -27 7 1
+               patch -19 6 1 patch -20 6 1 patch -21 6 1 patch -22 6 1 patch -23 6 1 patch -24 6 1 patch -25 6 1 patch -26 6 1 patch -27 6 1
+               patch -19 5 1 patch -20 5 1 patch -21 5 1 patch -22 5 1 patch -23 5 1 patch -24 5 1 patch -25 5 1 patch -26 5 1 patch -27 5 1
+               patch -21 4 1 patch -22 4 1 patch -23 4 1 patch -24 4 1 patch -25 4 1 patch -26 4 1 patch -27 4 1 patch -28 4 1
+               patch -21 3 1 patch -22 3 1 patch -23 3 1 patch -26 3 1 patch -27 3 1 patch -28 3 1 patch -29 3 1
+               patch -22 2 1 patch -27 2 1 patch -28 2 1 patch -29 2 1 patch -30 2 1
+               patch -28 1 1 patch -29 1 1 patch -30 1 1 patch -31 1 1
+               patch -29 0 1 patch -30 0 1 patch -31 0 1
+               patch -30 -1 1 patch -31 -1 1 patch -32 -1 1
+               patch -30 -2 1 patch -31 -2 1 patch -32 -2 1 patch -33 -2 1
+               patch -31 -3 1 patch -32 -3 1 patch -33 -3 1 patch -34 -3 1
+               patch -32 -4 1 patch -33 -4 1
+
+               patch -15 19 1
+               patch -14 18 1 patch -15 18 1 patch -16 18 1
+               patch -13 17 1 patch -14 17 1 patch -15 17 1
+               patch -12 16 1 patch -13 16 1 patch -14 16 1
+               patch -11 15 1 patch -12 15 1 patch -13 15 1
+               patch -10 14 1 patch -11 14 1 patch -12 14 1 patch -13 14 1
+               patch -11 13 1
+
+               patch 14 -3 1
+               patch 13 -2 1 patch 14 -2 1 patch 15 -2 1
+               patch 14 -1 1 patch 15 -1 1 patch 16 -1 1
+               patch 15 0 1 patch 16 0 1 patch 17 0 1
+               patch 16 1 1 patch 17 1 1 patch 18 1 1
+               patch 17 2 1 patch 18 2 1
+
+               patch 21 -8 1
+               patch 20 -7 1 patch 21 -7 1 patch 22 -7 1
+               patch 21 -6 1 patch 22 -6 1 patch 23 -6 1
+               patch 22 -5 1 patch 23 -5 1 patch 24 -5 1
+               patch 23 -4 1 patch 24 -4 1
+               patch 23 -3 1
+
+               patch 27 -13 1 patch 28 -13 1
+               patch 27 -12 1 patch 28 -12 1 patch 29 -12 1
+               patch 28 -11 1 patch 29 -11 1 patch 30 -11 1
+               patch 29 -10 1 patch 30 -10 1
+               patch 30 -9 1 patch 31 -9 1)
+
+  [ask patches with [pxcor = [pxcor] of myself and pycor = [pycor] of myself and pzcor = 3]
+     [set pcolor grey
+      set is-paved? true]
+  ask patches with [pxcor = [pxcor] of myself and pycor = [pycor] of myself and pzcor = 4]
+     [set pcolor grey
+      set is-paved? true]
+  ask patches with [pxcor = [pxcor] of myself and pycor = [pycor] of myself and pzcor = 5]
+     [set pcolor grey
+      set is-paved? true]]
+
+ask (patch-set patch -8 27 1 patch -7 27 1
+               patch -9 26 1 patch -8 26 1 patch -7 26 1 patch -6 26 1 patch -5 26 1
+               patch -10 25 1 patch -9 25 1 patch -8 25 1 patch -7 25 1 patch -6 25 1 patch -5 25 1 patch -4 25 1 patch -3 25 1
+               patch -11 24 1 patch -10 24 1 patch -9 24 1 patch -8 24 1 patch -7 24 1 patch -6 24 1 patch -5 24 1 patch -4 24 1 patch -3 24 1
+               patch -12 23 1 patch -11 23 1 patch -10 23 1 patch -9 23 1 patch -8 23 1 patch -7 23 1 patch -6 23 1 patch -5 23 1 patch -4 23 1 patch -3 23 1 patch -2 23 1
+               patch -12 22 1 patch -11 22 1 patch -10 22 1 patch -9 22 1 patch -8 22 1 patch -7 22 1 patch -6 22 1 patch -5 22 1 patch -4 22 1 patch -3 22 1 patch -2 22 1
+               patch -12 21 1 patch -11 21 1 patch -10 21 1 patch -9 21 1 patch -8 21 1 patch -5 21 1 patch -4 21 1 patch -3 21 1 patch -2 21 1
+               patch -11 20 1 patch -10 20 1 patch -9 20 1 patch -4 20 1 patch -3 20 1
+               patch -10 19 1)
+  [ask patches with [pxcor = [pxcor] of myself and pycor = [pycor] of myself and pzcor = 3]
+     [set pcolor grey
+      set is-paved? true]]
+
+;; setup urban green speces
+  ask patches with [pcolor > 50 and pcolor < 65]
+     [set pcolor 57
+      set is-urban? true
+      set is-paved? false]
+
+  ask patches with [pxcor >= -3 and pxcor < 13 and pycor > -1 and pycor < 12 and pzcor = 2 and is-paved? = true]
+    [ ask patches with [pxcor = [pxcor] of myself and pycor = [pycor] of myself and pzcor = 3]
+           [set pcolor 57
+            set is-urban? true
+            set is-paved? false] ]
+
+  ask (patch-set patch -8 21 3 patch -7 22 3 patch -6 22 3 patch -5 21 3 patch -4 20 3 patch -3 20 3 patch -2 21 3 patch -2 22 3 patch -2 23 3 patch -3 24 3 patch -3 25 3 patch -4 25 3 patch -5 26 3
+                 patch -6 26 3 patch -7 27 3 patch -8 27 3 patch -8 26 3 patch -9 26 3 patch -10 25 3 patch -10 24 3  patch -11 24 3
+                 patch -12 24 3 patch -12 23 3 patch -12 22 3 patch -12 21 3 patch -11 20 3 patch -10 19 3 patch -9 20 3 patch -9 21 3   )
+    [ ask patches with [pxcor = [pxcor] of myself and pycor = [pycor] of myself and pzcor = 4]
+           [set pcolor 57
+            set is-urban? true
+            set is-paved? false] ]
+
+  ask patches with [is-urban? = false and pzcor = 0]
+    [set pcolor 9
+     set is-paved? true]
+
+ ;; setup atmosphere
+  ask patches with [pzcor > 0 and is-paved? = false]
+    [set atmosphere? true
+     set air_temperature soil_temperature]
+
+  ask patch 10 0 3
+    [set is-urban? false
+     set pcolor 0
+     set atmosphere? true
+     set air_temperature soil_temperature]
+
+end
+
+to setup-vegetation
+
+  ;;; setup the trees ;;;
+  ask (patch-set patch 0 -4 0 patch -1 -3 0 patch -2 -2 0 patch -3 -1 0 patch -4 0 0 patch -5 1 0 patch -6 2 0 patch -7 3 0
+                 patch 12 -14 0 patch 13 -15 0 patch 14 -16 0
+                 patch 18 -19 0 patch 19 -20 0 patch 20 -21 0 patch 21 -22 0)
+    [sprout-nvgts 1 [set color green
+                     set zcor 1
+                     set shape "circle"
+                     set size 1.5
+                     set aqii_leaf 3 ]]
+
+  ;;; setup shrubs and flowers ;;;
+
+ ask (patch-set patch -9 1 0 patch -8 0 0 patch -7 -1 0 patch -6 -2 0 patch -4 -3 0 patch -3 -4 0 patch -2 -5 0 patch -1 -6 0  patch -1 -7 0 patch -1 -8 0
+                patch 5 -8 0 patch 6 -9 0 patch 6 -8 0 patch 7 -10 0 patch 7 -9 0
+                patch 7 -15 0 patch 7 -14 0 patch 9 -17 0 patch 10 -17 0 patch 10 -16 0 patch 13 -18 0 patch 13 -19 0 patch 16 -22 0
+                patch -15 -34 0 patch -15 -37 0 patch -15 -38 0 patch -15 -39 0
+                patch -11 -29 0 patch -10 -29 0 patch -9 -29 0
+                patch -10 -22 0 patch -11 -23 0 patch -11 -24 0 patch -10 -25 0 patch -9 -26 0 patch -8 -26 0 patch -7 -26 0
+                patch -41 -30 0 patch -40 -30 0 patch -39 -30 0
+                patch -15 27 0 patch -13 29 0 patch -12 30 0 patch -14 38 0 patch -13 37 0 patch -12 35 0 patch -11 35 0
+                patch 14 -33 0 patch 13 -33 0 patch 11 -32 0 patch 10 -32 0)
+        [sprout-uvgts 1 [set color 57
+                         set zcor 0.7
+                         set shape "circle"
+                         set size 0.25
+                         forward 0.5
+                         set aqii_leaf 1 ]]
+
+ ask (patch-set patch 14 -39 0 patch 12 -36 0 patch 11 -36 0 patch 10 -35 0 patch 9 -35 0 patch 8 -35 0)
+         [sprout-uvgts 1 [set color green
+                          set zcor 0.7
+                          set shape "circle"
+                          set size 0.45
+                          forward 0.5
+                          set aqii_leaf 1.5]]
+
+end
+
+to setup-soil-water-retention
+
+  ask patches with [pzcor = 0]
+  [set ideal_vegetation_volume 0.05
+   set ideal_roughness 0.1
+   set ideal_soil_humidity 0.32
+   set s_h ideal_soil_humidity
+   set max_soil_humidity 0.40
+   set min_wilting_point 0.15
+   set ideal_soil_suction -0.00001 * ((8.314 * 298)/ 1 * 18.016) * ln(0.32)]
+
+  ask patches with [is-urban? = true and pzcor != 0]
+  [set ideal_vegetation_volume 0.50
+   set ideal_roughness 0.15
+   set ideal_soil_humidity 0.32
+   set s_h ideal_soil_humidity
+   set max_soil_humidity 0.40
+   set min_wilting_point 0.15
+   set ideal_soil_suction -0.00001 * ((8.314 * 298)/ 1 * 18.016) * ln(0.32)]
+
+  ask patches with [s_h > 0]
+    [set soil_humidity mean [s_h] of patches with [s_h > 0] ];set this variable to specific number for quick runs
+
+ifelse soil_humidity != 0
+  [set soil_suction -0.00001 * ((8.314 * soil_temperature)/ 1 * 18.016) * ln(soil_humidity)]
+  [set soil_suction -0.00001 * (8.314 * soil_temperature)/ 1 * 18.016 ]
+
+  ask patches with [s_h > 0 and any? nvgts-here or any? uvgts-here or any? fvgts-here in-radius 2]
+        [set vegetation_volume mean [size] of (turtle-set nvgts uvgts fvgts) in-radius 2]
+
+ ask patches
+     [ifelse vegetation_volume > 0.001
+        [set surface_roughness vegetation_volume ]
+        [set surface_roughness 0.10]  ]
+
+  ask patches with [is-natural? = true]
+      [set organic_content 28]
+  ask patches with [is-urban? = true]
+     [set organic_content 8]
+  ask patches with [is-fluvial? = true]
+     [set organic_content 10]
+  ask patches with [is-paved? = true]
+     [set organic_content 0]
+
+end
+
+to setup-biodiversity
+
+   let vgts (turtle-set nvgts fvgts uvgts)
+   ask vgts
+       [ifelse any? nvgts with [size <= 1]
+            [let diversity_1 (count nvgts with [size <= 1] / count vgts)
+             set d_1 -1 * diversity_1 * ln diversity_1] ; Shannon's divesity index (H') in Morris et al. 2014
+            [set d_1 0]
+        ifelse any? nvgts with [size > 1]
+            [let diversity_2 (count nvgts with [size > 1] / count vgts)
+             set d_2 -1 * diversity_2 * ln diversity_2]
+            [set d_2 0]
+        ifelse any? fvgts
+            [let diversity_3 (count fvgts / count vgts)
+             set d_3 -1 * diversity_3 * ln diversity_3 ]
+            [set d_3 0]
+        ifelse any? uvgts with [size <= 0.30]
+           [let diversity_4 (count uvgts with [size <= 0.30] / count vgts)
+            set d_4 -1 * diversity_4 * ln diversity_4]
+           [set d_4 0]
+        ifelse any? uvgts with [size > 0.30]
+           [let diversity_5 (count uvgts with [size > 0.30] / count vgts)
+            set d_5 -1 * diversity_5 * ln diversity_5]
+           [set d_5 0]
+
+        set flora_diversity d_1 + d_2 + d_3 + d_4 + d_5 ]
+
+     set ideal_biodiversity flora_diversity
+
+end
+
+to setup-community
+
+
+;; community agents ;;
+ ;all buidlings in the campus share the same level of importance for the university community
+
+  ask patches with [count (neighbors with [pzcor = 0 and is-paved? = false]) > 2]
+      [sprout-ppls NBS_attractiveness [set color orange
+                                       set zcor [pzcor] of myself
+                                       set shape "square"
+                                       set size 0.10
+                                        forward 1]]
+
+  let vgts (turtle-set nvgts uvgts fvgts)
+  ask patches with [pzcor = 0 and is-paved? = false and any? vgts = true]
+      [sprout-ppls NBS_attractiveness * 2 [set color orange
+                                           set zcor [pzcor] of myself
+                                           set shape "square"
+                                           set size 0.10
+                                           forward 1]]
+
+  set initial_community_index count ppls / count patches with [pzcor = 0]
+
+end
+
+to setup-NBS_alternatives
+
+;; setup bioswales and rain gardens
+  if bioswales = true
+    [ask n-of (bs_area / 49) patches with [is-urban? = true and count neighbors6 with [is-paved? = false] > 2 and pzcor = 0]
+       [set is-fluvial? true
+        set pcolor cyan
+        set vegetation_volume 0.80
+        set surface_roughness 0.80
+        set ideal_soil_humidity 0.50
+        sprout-fvgts 3 [set color cyan
+                        set zcor 0.50
+                        set size random-float 0.50
+                        forward 0.5 ]
+       set max_soil_humidity 0.70]
+
+       set satisfaction_level (1 + (bs_area / 49) * satisfaction_level / 300) * satisfaction_level]
+
+  ;; setup green roofs
+  if green_roofs = true
+    [if gr_type = "ext"
+      [ask n-of (gr_area / 49) patches with [is-urban? = true and pzcor > 0]
+          [sprout-uvgts 3 [set color green
+                           set shape "circle"
+                           set zcor pzcor + 0.5
+                           set size random-float 0.5
+                           set aqii_leaf 1.5]
+          set vegetation_volume 0.60
+          set surface_roughness 0.60
+          set max_soil_humidity 0.40 ]]
+
+      if gr_type = "int"
+        [ask n-of (gr_area / 49) patches with [is-urban? = true and pzcor > 0]
+            [sprout-uvgts 4 [set color green
+                             set shape "circle"
+                             set zcor pzcor + 0.5
+                             set size random-float 1.5
+                             set aqii_leaf 2]
+          set vegetation_volume 0.80
+          set surface_roughness 0.80
+          set max_soil_humidity 0.40 ]] ]
+
+  ;; setup green facades
+  if green_facades = true
+    [ask n-of ((gf_area / 49) / 4) patches with [is-paved? = true and pzcor > 0 and any? neighbors6 with [atmosphere? = true]]
+      [sprout-uvgts 2 [set color green
+                      set ycor pycor + 0.5
+                      set xcor pxcor + 0.5
+                      set size random-float 0.5
+                      set aqii_leaf 1.5
+                      forward 0.5]
+      ask patches in-radius 1 with [is-paved? = true and pzcor > 0 and any? neighbors6 with [atmosphere? = true]]
+          [sprout-uvgts 2 [set color green
+                           set ycor pycor + 0.50
+                           set xcor pxcor + 0.50
+                           set size random-float 0.5
+                           set aqii_leaf 1.5
+                           forward 0.50]] ]
+    set satisfaction_level (1 + (bs_area / 49) * satisfaction_level / 500) * satisfaction_level]
+
+  ;; setup green engancement
+    if green_enhancement = true
+      [ask n-of (ge_area / 49) patches with [is-urban? = true and pzcor = 0]
+        [ifelse count neighbors6 with [is-paved? = false] > 2
+             [sprout-nvgts 1 [set color green
+                              set zcor 1
+                              set size random-float 1.0
+                              set aqii_leaf 2]
+              sprout-uvgts 2 [set color green
+                              set zcor 0.5
+                              set size random-float 0.7
+                              set aqii_leaf 1] ]
+             [sprout-uvgts 4 [set color green
+                              set zcor 0.5
+                              set size random-float 0.5
+                              set aqii_leaf 1.5]]
+          set vegetation_volume 0.60
+          set surface_roughness 0.60
+          set max_soil_humidity 0.40]
+
+        set satisfaction_level (1 + (ge_area / 49) * satisfaction_level / 100) * satisfaction_level ]
+
+  ;; setup permeable pavement
+    if permeable_pavement = true
+      [ask n-of (pp_area / 49) patches with [is-paved? = true and count neighbors6 with [is-urban? = true or is-fluvial? = true] > 1 ]
+          [set is-perm? true
+           set pcolor brown
+           set surface_roughness 0.40
+           set organic_content 8
+           set max_soil_humidity 0.60]]
+
+end
+
+;;; ASSESSMENT PROCEDURES ;;;  ASSESSMENT PROCEDURES ;;;  ASSESSMENT PROCEDURES ;;;
+
+to assess-soil-water-retention
+
+
+    ask patches with [ideal_vegetation_volume > 0]
+       [set surface (((vegetation_volume - ideal_vegetation_volume)/ ideal_vegetation_volume) / 2 +
+                     ((surface_roughness - ideal_roughness) / ideal_roughness) / 2 ) * 100
+
+        set soil (((max_soil_humidity - s_h) / ideal_soil_humidity) / 3 +
+                  ((s_h - min_wilting_point ) / min_wilting_point) / 3 +
+                  ((soil_suction) / ideal_soil_suction) / 3 ) * 100 ]
+
+  ask patches
+    [set soil_water_retention (surface / 2) + (soil / 2)]
+
+end
+
+to assess-vegetation
+
+  ask patches with [organic_content > 0]
+    [ifelse organic_content > 0 ;and soil_humidity > 0 min_wilting_point and soil_humidity < max_soil_humidity
+       [set sfi (organic_content / 100) + (soil_humidity / min_wilting_point) + (max_soil_humidity / soil_humidity)] ;average soil pH at 6.5
+       [set sfi 0]
+     set ideal_sfi 21.785 + (32 / 15) + (60 / 32)] ;21.785 :mean [organic_content] of patches of the ground
+
+  let vgts (turtle-set nvgts uvgts fvgts)
+  set veg_cover (count patches with [s_h > 0 and is-paved? = false] / count patches with [s_h > 0]) / 2 +
+                ((count vgts * mean [size] of vgts) / count patches with [s_h > 0]) / 2
+
+
+     set ideal_veg 0.25 ; count patches with [is-natural? ] * 3 / count patches with [s_h > 0] ] 30% grass and 20% tree cover Meili 2021
+   if ideal_veg > 0 ;; set a standard ideal_veg for this type of city
+     [set flora (veg_cover - ideal_veg) / ideal_veg] ;
+
+   let sfi_perf (sfi - ideal_sfi / ideal_sfi)
+   set vegetation flora + sfi_perf
+
+end
+
+to assess-biodiversity
+
+  let vgts (turtle-set nvgts uvgts fvgts)
+  ask (vgts)
+       [ifelse any? nvgts with [size <= 1]
+            [let diversity_1 (count nvgts with [size <= 1] / count vgts)
+             set d_1 -1 * diversity_1 * ln diversity_1] ; Shannon's divesity index (H') in Morris et al. 2014
+            [set d_1 0]
+        ifelse any? nvgts with [size > 1]
+            [let diversity_2 (count nvgts with [size > 1] / count vgts)
+             set d_2 -1 * diversity_2 * ln diversity_2]
+            [set d_2 0]
+        ifelse any? fvgts
+            [let diversity_3 (count fvgts / count vgts)
+             set d_3 -1 * diversity_3 * ln diversity_3 ]
+            [set d_3 0]
+        ifelse any? uvgts with [size <= 0.30]
+           [let diversity_4 (count uvgts with [size <= 0.30] / count vgts)
+            set d_4 -1 * diversity_4 * ln diversity_4]
+           [set d_4 0]
+        ifelse any? uvgts with [size > 0.30]
+           [let diversity_5 (count uvgts with [size > 0.30] / count vgts)
+            set d_5 -1 * diversity_5 * ln diversity_5]
+           [set d_5 0]
+
+        set fl_d d_1 + d_2 + d_3 + d_4 + d_5 ]
+
+  set biodiversity ((fl_d) - ideal_biodiversity ) / ideal_biodiversity
+
+end
+
+to assess-community
+
+  ask ppls [forward 1]
+  ask patches with [is-paved? = true and any? ppls-here = true]
+        [ask ppls-here [die]]
+
+  ask patches with [count (neighbors with [pzcor = 0 and is-paved? = false ]) > 2 and any? ppls-here = false]
+      [sprout-ppls NBS_attractiveness [set color orange
+                                       set zcor [pzcor] of myself
+                                       set shape "square"
+                                       set size 0.10
+                                        forward 1]]
+
+  let vgts (turtle-set nvgts uvgts fvgts)
+  ask patches with [pzcor = 0 and is-paved? = false and any? vgts = true and any? ppls-here = false]
+      [sprout-ppls NBS_attractiveness * 2 [set color orange
+                                           set zcor [pzcor] of myself
+                                           set shape "square"
+                                           set size 0.10
+                                           forward 1]]
+
+ set community_index count ppls / count patches with [pzcor = 0]
+ set community (community_index - initial_community_index)/ initial_community_index
+
+ ask ppls [forward 1]
+
+end
+
+to assess-air
+    let vgts (turtle-set nvgts fvgts uvgts)
+
+  ask vgts
+    [ask patches in-radius (3 * [size] of self) with [atmosphere? = true]
+      [if temperature_variation = "<10"
+        [set cool_dif -1.5]
+      if temperature_variation = "10-20"
+        [set cool_dif -0.9]
+      if temperature_variation = "20-30"
+        [set cool_dif -0.8]]]
+
+   ask vgts with [size <= 0.5]
+    [set aqii_habit 1
+     set aqii_canopy 1]
+  ask vgts with [size > 0.5 and size < 1]
+    [set aqii_habit 2
+     set aqii_canopy 2]
+   ask vgts with [size >= 1]
+    [set aqii_habit 3
+     set aqii_canopy 3]
+
+  set ideal_aqii count vgts * (reference_habit + reference_canopy + mean [aqii_leaf] of vgts)
+
+  ask patches with [atmosphere? = true]
+      [set air_sample count patches with [atmosphere? = true]]
+
+  set cool_patches count patches with [atmosphere? = true and any? nvgts-here = true or any? uvgts-here = true or any? fvgts-here = true] * 8 * mean [size] of vgts
+  let cool_p patches with [atmosphere? = true and any? nvgts-here = true or any? uvgts-here = true or any? fvgts-here = true]
+  ask cool_p
+    [ifelse air_temperature > 298
+      [set air_temperature (air_temperature + cool_dif)]
+      [set air_temperature 298]]
+
+ diffuse cool_dif 1
+
+
+  ask patches with [atmosphere? = true]
+        [set cooling (cool_patches / air_sample) * (-1 * cool_dif) * 100]
+
+  ask vgts
+    [set aqii mean [aqii_habit] of vgts + mean [aqii_canopy] of vgts + 3
+     set air ((aqii - ideal_aqii) / ideal_aqii) + (cooling)]
+
+end
+
+to assess-ES
+
+  let vgts (turtle-set nvgts fvgts uvgts)
+
+  ifelse erosion_control = true
+    [set erosion_control_value mean [soil_water_retention] of patches ]
+    [set erosion_control_value 0]
+  ifelse gas_regulation = true
+    [set gas_regulation_value aqii]
+    [set gas_regulation_value 0 ]
+  ifelse microclimate_regulation = true
+    [set microclimate_regulation_value mean [cooling] of patches ]
+    [set microclimate_regulation_value 0]
+  ifelse nutrient_cycling = true
+    [set nutrient_cycling_value (sfi - ideal_sfi / ideal_sfi)] ;soil reftility perfomance
+    [set nutrient_cycling_value 0]
+  ifelse pollination = true
+    [set pollination_value (cool_patches / count patches with [atmosphere? = true]) ]
+    [set pollination_value 0]
+  ifelse refugia = true
+    [set refugia_value 1 * (count vgts * 10 / count patches with [is-paved? = false and atmosphere? = false]) ] ; Abd-Allah et al. 2012
+    [set refugia_value 0]
+  ifelse soil_formation = true
+    [set soil_formation_value mean [soil] of patches]
+    [set soil_formation_value 0]
+  ifelse water_regulation = true
+    [set water_regulation_value 0.10 * abs ((mean [soil_suction] of patches - mean [ideal_soil_suction] of patches) / mean [ideal_soil_suction] of patches) ]
+    [set water_regulation_value 0]
+
+
+  set regulating (erosion_control_value + gas_regulation_value + microclimate_regulation_value + nutrient_cycling_value + pollination_value + refugia_value + soil_formation_value + water_regulation_value ) / 8 ; average of all regulating services
+
+  ifelse genetic_resources = true
+    [set genetic_resources_value (0.001 * count vgts) + (0.001 * count vgts * 10)]
+    [set genetic_resources_value 0]
+  ifelse raw_materials_value = true
+    [set raw_materials_value 0.1 * count vgts]
+    [set raw_materials_value 0]
+  ifelse water_savings = true
+    [set water_savings_value (mean [soil_water_retention] of patches / 10) ]
+    [set water_savings_value 0]
+
+  set provisioning (genetic_resources_value + raw_materials_value + water_savings_value) / 3 ; average of all provisioning services
+
+  ifelse cultural_use = true
+    [set cultural_use_value 0.10 * usage_level * count ppls / 1000 ]
+    [set cultural_use_value 0]
+  ifelse recreation = true
+    [set recreation_value veg_cover * satisfaction_level * count ppls / 1000]
+    [set recreation_value 0]
+
+  set cultural (cultural_use_value + recreation_value) / 2 ; average of all cultural services
+
+end
+
+;;; RECOVERY PROCEDURES OF NBS ;;; RECOVERY PROCEDURES OF NBS;;;  RECOVERY PROCEDURES OF NBS;;;
+
+to recover_heatwave
+  ask patches
+    [set soil_temperature air_temperature]
+
+  ask patches with [atmosphere? = true]
+    [ifelse air_temperature - 298 > 0
+          [set air_temperature air_temperature - 0.5 ]
+          [set air_temperature 298]
+
+  if hw_temperature - 298 <= 10
+     [set cool_dif -1.5]
+  if hw_temperature - 298 > 10 and hw_temperature - 298 <= 20
+     [set cool_dif -0.9]
+  if hw_temperature - 298 > 20 and hw_temperature - 298 <= 30
+     [set cool_dif -0.8] ]
+
+end
+
+;;; DISRUPTIVE EVENTS ;;; DISRUPTIVE EVENTS ;;; DISRUPTIVE EVENTS ;;;
+
+
+to heatwave
+  let vgts (turtle-set nvgts uvgts fvgts)
+
+  if heatwave? = true and ticks = 1
+    [ask patches with [is-paved? = true]
+      [set soil_temperature hw_temperature * 1.2]
+     ask patches with [is-paved? = false and atmosphere? = false]
+      [set soil_temperature air_temperature
+       set s_h hw_humidity]
+      ask uvgts
+        [ask n-of ((hw_temperature - 298) / 10) uvgts [die]]
+     ask patches with [atmosphere? = true]
+      [set air_temperature hw_temperature]
+     ask ppls
+       [ask n-of ((abs(hw_temperature - 298)) * 0.1) ppls [die]]
+
+    set satisfaction_level satisfaction_level * (1 - (abs (hw_temperature - 298) / 100))
+    set NBS_attractiveness NBS_attractiveness * (1 - (abs (hw_temperature - 298) / 100))]
+
+
+end
+@#$#@#$#@
+GRAPHICS-WINDOW
+0
+0
+938
+1019
+-1
+-1
+10.0
+1
+10
+1
+1
+1
+0
+1
+1
+1
+-46
+46
+-50
+50
+0
+6
+1
+0
+1
+ticks
+30.0
+
+BUTTON
+5
+10
+68
+43
+NIL
+setup
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+74
+10
+147
+43
+go once
+go
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+153
+10
+216
+43
+go
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+TEXTBOX
+7
+46
+157
+64
+Properties of soil
+12
+0.0
+1
+
+MONITOR
+6
+65
+80
+106
+soil humidity
+soil_humidity
+2
+1
+10
+
+SLIDER
+82
+64
+202
+97
+soil_temperature
+soil_temperature
+243
+350
+310.0
+1
+1
+K
+HORIZONTAL
+
+MONITOR
+6
+110
+86
+155
+surface (%)
+mean [surface] of patches
+3
+1
+11
+
+MONITOR
+92
+110
+171
+155
+soil (%)
+mean [soil] of patches
+3
+1
+11
+
+TEXTBOX
+5
+161
+155
+179
+Properties of vegetation
+12
+0.0
+1
+
+MONITOR
+5
+181
+90
+226
+soil fertility (%)
+(sfi - ideal_sfi / ideal_sfi)
+3
+1
+11
+
+MONITOR
+94
+181
+183
+226
+flora index (%)
+flora
+3
+1
+11
+
+MONITOR
+187
+181
+268
+226
+flora diversity
+fl_d
+3
+1
+11
+
+TEXTBOX
+7
+339
+211
+369
+Properties of community activity
+12
+0.0
+1
+
+SLIDER
+6
+362
+136
+395
+NBS_attractiveness
+NBS_attractiveness
+0
+1
+0.5
+.1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+139
+357
+268
+402
+community index (%)
+community
+3
+1
+11
+
+TEXTBOX
+7
+267
+157
+285
+Properties of air
+12
+0.0
+1
+
+TEXTBOX
+264
+10
+374
+28
+Disruptive events
+14
+0.0
+1
+
+SWITCH
+263
+34
+373
+67
+heatwave?
+heatwave?
+0
+1
+-1000
+
+TEXTBOX
+435
+10
+553
+28
+NBS alternatives
+14
+0.0
+1
+
+SWITCH
+417
+34
+562
+67
+bioswales
+bioswales
+1
+1
+-1000
+
+SWITCH
+422
+177
+568
+210
+green_roofs
+green_roofs
+1
+1
+-1000
+
+SWITCH
+415
+106
+564
+139
+green_facades
+green_facades
+1
+1
+-1000
+
+SWITCH
+419
+261
+568
+294
+green_enhancement
+green_enhancement
+1
+1
+-1000
+
+SWITCH
+417
+332
+570
+365
+permeable_pavement
+permeable_pavement
+1
+1
+-1000
+
+TEXTBOX
+657
+24
+807
+42
+Ecosystem Services
+14
+0.0
+1
+
+TEXTBOX
+602
+51
+714
+69
+Regulating services
+12
+0.0
+1
+
+TEXTBOX
+738
+52
+857
+70
+Provisioning services
+12
+0.0
+1
+
+TEXTBOX
+736
+193
+839
+211
+Cultural services
+12
+0.0
+1
+
+SWITCH
+587
+71
+707
+104
+erosion_control
+erosion_control
+0
+1
+-1000
+
+SWITCH
+586
+110
+708
+143
+gas_regulation
+gas_regulation
+0
+1
+-1000
+
+SWITCH
+587
+147
+710
+180
+microclimate_regulation
+microclimate_regulation
+0
+1
+-1000
+
+SWITCH
+587
+182
+710
+215
+nutrient_cycling
+nutrient_cycling
+0
+1
+-1000
+
+SWITCH
+587
+218
+711
+251
+pollination
+pollination
+0
+1
+-1000
+
+SWITCH
+588
+254
+712
+287
+soil_formation
+soil_formation
+0
+1
+-1000
+
+SWITCH
+588
+290
+712
+323
+refugia
+refugia
+0
+1
+-1000
+
+SWITCH
+587
+326
+713
+359
+water_regulation
+water_regulation
+0
+1
+-1000
+
+SWITCH
+733
+72
+866
+105
+genetic_resources
+genetic_resources
+0
+1
+-1000
+
+SWITCH
+732
+107
+866
+140
+raw_materials
+raw_materials
+0
+1
+-1000
+
+SWITCH
+731
+142
+866
+175
+water_savings
+water_savings
+0
+1
+-1000
+
+SWITCH
+732
+212
+863
+245
+cultural_use
+cultural_use
+0
+1
+-1000
+
+SLIDER
+733
+250
+863
+283
+usage_level
+usage_level
+0
+1
+0.5
+.1
+1
+NIL
+HORIZONTAL
+
+SWITCH
+732
+286
+865
+319
+recreation
+recreation
+0
+1
+-1000
+
+SLIDER
+733
+322
+866
+355
+satisfaction_level
+satisfaction_level
+0
+1
+0.5
+.1
+1
+NIL
+HORIZONTAL
+
+PLOT
+4
+404
+437
+598
+Performance scores
+time
+(%)
+0.0
+10.0
+-10.0
+10.0
+true
+true
+"" ""
+PENS
+"0" 1.0 0 -16777216 true "" "plot 0"
+"soil retention" 1.0 0 -6459832 true "" "plot mean [soil_water_retention] of patches"
+"vegetation" 1.0 0 -10899396 true "" "plot vegetation"
+"community" 1.0 0 -2674135 true "" "plot community"
+"air" 1.0 0 -13791810 true "" "plot air"
+
+PLOT
+458
+405
+872
+595
+Ecosystem Services Value Change
+time
+(%)
+0.0
+10.0
+-10.0
+10.0
+true
+true
+"" ""
+PENS
+"regulating" 1.0 0 -14835848 true "" "plot regulating"
+"provisioning" 1.0 0 -955883 true "" "plot provisioning"
+"cultural" 1.0 0 -7500403 true "" "plot cultural"
+
+CHOOSER
+4
+285
+124
+330
+temperature_variation
+temperature_variation
+"<10" "10-20" "20-30"
+0
+
+MONITOR
+128
+286
+206
+331
+cooling performance (%)
+mean [cooling] of patches
+2
+1
+11
+
+MONITOR
+210
+286
+287
+331
+air quality assessment (%)
+aqii
+2
+1
+11
+
+SLIDER
+6
+230
+132
+263
+reference_habit
+reference_habit
+0
+3
+2.0
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+137
+230
+268
+263
+reference_canopy
+reference_canopy
+0
+3
+1.8
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+450
+69
+562
+102
+bs_area
+bs_area
+50
+30000
+1000.0
+50
+1
+m2
+HORIZONTAL
+
+SLIDER
+458
+296
+568
+329
+ge_area
+ge_area
+50
+30000
+1000.0
+50
+1
+m2
+HORIZONTAL
+
+SLIDER
+459
+367
+570
+400
+pp_area
+pp_area
+50
+30000
+1000.0
+50
+1
+m2
+HORIZONTAL
+
+SLIDER
+452
+140
+565
+173
+gf_area
+gf_area
+50
+47850
+1000.0
+200
+1
+m2
+HORIZONTAL
+
+CHOOSER
+368
+213
+460
+258
+gr_type
+gr_type
+"ext" "int"
+1
+
+SLIDER
+463
+213
+568
+246
+gr_area
+gr_area
+50
+6000
+1000.0
+50
+1
+m2
+HORIZONTAL
+
+SLIDER
+263
+71
+375
+104
+hw_temperature
+hw_temperature
+243
+350
+310.0
+1
+1
+K
+HORIZONTAL
+
+SLIDER
+262
+107
+375
+140
+hw_humidity
+hw_humidity
+0
+1
+0.2
+0.01
+1
+%
+HORIZONTAL
+
+@#$#@#$#@
+## WHAT IS IT?
+
+(a general understanding of what the model is trying to show or explain)
+
+## HOW IT WORKS
+
+(what rules the agents use to create the overall behavior of the model)
+
+## HOW TO USE IT
+
+(how to use the model, including a description of each of the items in the Interface tab)
+
+## THINGS TO NOTICE
+
+(suggested things for the user to notice while running the model)
+
+## THINGS TO TRY
+
+(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
+
+## EXTENDING THE MODEL
+
+(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
+
+## NETLOGO FEATURES
+
+(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
+
+## RELATED MODELS
+
+(models in the NetLogo Models Library and elsewhere which are of related interest)
+
+## CREDITS AND REFERENCES
+
+(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+@#$#@#$#@
+default
+true
+0
+Polygon -7500403 true true 150 5 40 250 150 205 260 250
+
+airplane
+true
+0
+Polygon -7500403 true true 150 0 135 15 120 60 120 105 15 165 15 195 120 180 135 240 105 270 120 285 150 270 180 285 210 270 165 240 180 180 285 195 285 165 180 105 180 60 165 15
+
+arrow
+true
+0
+Polygon -7500403 true true 150 0 0 150 105 150 105 293 195 293 195 150 300 150
+
+box
+false
+0
+Polygon -7500403 true true 150 285 285 225 285 75 150 135
+Polygon -7500403 true true 150 135 15 75 150 15 285 75
+Polygon -7500403 true true 15 75 15 225 150 285 150 135
+Line -16777216 false 150 285 150 135
+Line -16777216 false 150 135 15 75
+Line -16777216 false 150 135 285 75
+
+bug
+true
+0
+Circle -7500403 true true 96 182 108
+Circle -7500403 true true 110 127 80
+Circle -7500403 true true 110 75 80
+Line -7500403 true 150 100 80 30
+Line -7500403 true 150 100 220 30
+
+butterfly
+true
+0
+Polygon -7500403 true true 150 165 209 199 225 225 225 255 195 270 165 255 150 240
+Polygon -7500403 true true 150 165 89 198 75 225 75 255 105 270 135 255 150 240
+Polygon -7500403 true true 139 148 100 105 55 90 25 90 10 105 10 135 25 180 40 195 85 194 139 163
+Polygon -7500403 true true 162 150 200 105 245 90 275 90 290 105 290 135 275 180 260 195 215 195 162 165
+Polygon -16777216 true false 150 255 135 225 120 150 135 120 150 105 165 120 180 150 165 225
+Circle -16777216 true false 135 90 30
+Line -16777216 false 150 105 195 60
+Line -16777216 false 150 105 105 60
+
+car
+false
+0
+Polygon -7500403 true true 300 180 279 164 261 144 240 135 226 132 213 106 203 84 185 63 159 50 135 50 75 60 0 150 0 165 0 225 300 225 300 180
+Circle -16777216 true false 180 180 90
+Circle -16777216 true false 30 180 90
+Polygon -16777216 true false 162 80 132 78 134 135 209 135 194 105 189 96 180 89
+Circle -7500403 true true 47 195 58
+Circle -7500403 true true 195 195 58
+
+circle
+false
+0
+Circle -7500403 true true 0 0 300
+
+circle 2
+false
+0
+Circle -7500403 true true 0 0 300
+Circle -16777216 true false 30 30 240
+
+cow
+false
+0
+Polygon -7500403 true true 200 193 197 249 179 249 177 196 166 187 140 189 93 191 78 179 72 211 49 209 48 181 37 149 25 120 25 89 45 72 103 84 179 75 198 76 252 64 272 81 293 103 285 121 255 121 242 118 224 167
+Polygon -7500403 true true 73 210 86 251 62 249 48 208
+Polygon -7500403 true true 25 114 16 195 9 204 23 213 25 200 39 123
+
+cylinder
+false
+0
+Circle -7500403 true true 0 0 300
+
+dot
+false
+0
+Circle -7500403 true true 90 90 120
+
+face happy
+false
+0
+Circle -7500403 true true 8 8 285
+Circle -16777216 true false 60 75 60
+Circle -16777216 true false 180 75 60
+Polygon -16777216 true false 150 255 90 239 62 213 47 191 67 179 90 203 109 218 150 225 192 218 210 203 227 181 251 194 236 217 212 240
+
+face neutral
+false
+0
+Circle -7500403 true true 8 7 285
+Circle -16777216 true false 60 75 60
+Circle -16777216 true false 180 75 60
+Rectangle -16777216 true false 60 195 240 225
+
+face sad
+false
+0
+Circle -7500403 true true 8 8 285
+Circle -16777216 true false 60 75 60
+Circle -16777216 true false 180 75 60
+Polygon -16777216 true false 150 168 90 184 62 210 47 232 67 244 90 220 109 205 150 198 192 205 210 220 227 242 251 229 236 206 212 183
+
+fish
+false
+0
+Polygon -1 true false 44 131 21 87 15 86 0 120 15 150 0 180 13 214 20 212 45 166
+Polygon -1 true false 135 195 119 235 95 218 76 210 46 204 60 165
+Polygon -1 true false 75 45 83 77 71 103 86 114 166 78 135 60
+Polygon -7500403 true true 30 136 151 77 226 81 280 119 292 146 292 160 287 170 270 195 195 210 151 212 30 166
+Circle -16777216 true false 215 106 30
+
+flag
+false
+0
+Rectangle -7500403 true true 60 15 75 300
+Polygon -7500403 true true 90 150 270 90 90 30
+Line -7500403 true 75 135 90 135
+Line -7500403 true 75 45 90 45
+
+flower
+false
+0
+Polygon -10899396 true false 135 120 165 165 180 210 180 240 150 300 165 300 195 240 195 195 165 135
+Circle -7500403 true true 85 132 38
+Circle -7500403 true true 130 147 38
+Circle -7500403 true true 192 85 38
+Circle -7500403 true true 85 40 38
+Circle -7500403 true true 177 40 38
+Circle -7500403 true true 177 132 38
+Circle -7500403 true true 70 85 38
+Circle -7500403 true true 130 25 38
+Circle -7500403 true true 96 51 108
+Circle -16777216 true false 113 68 74
+Polygon -10899396 true false 189 233 219 188 249 173 279 188 234 218
+Polygon -10899396 true false 180 255 150 210 105 210 75 240 135 240
+
+house
+false
+0
+Rectangle -7500403 true true 45 120 255 285
+Rectangle -16777216 true false 120 210 180 285
+Polygon -7500403 true true 15 120 150 15 285 120
+Line -16777216 false 30 120 270 120
+
+leaf
+false
+0
+Polygon -7500403 true true 150 210 135 195 120 210 60 210 30 195 60 180 60 165 15 135 30 120 15 105 40 104 45 90 60 90 90 105 105 120 120 120 105 60 120 60 135 30 150 15 165 30 180 60 195 60 180 120 195 120 210 105 240 90 255 90 263 104 285 105 270 120 285 135 240 165 240 180 270 195 240 210 180 210 165 195
+Polygon -7500403 true true 135 195 135 240 120 255 105 255 105 285 135 285 165 240 165 195
+
+line
+true
+0
+Line -7500403 true 150 0 150 300
+
+line half
+true
+0
+Line -7500403 true 150 0 150 150
+
+pentagon
+false
+0
+Polygon -7500403 true true 150 15 15 120 60 285 240 285 285 120
+
+person
+false
+0
+Circle -7500403 true true 110 5 80
+Polygon -7500403 true true 105 90 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285 180 195 195 90
+Rectangle -7500403 true true 127 79 172 94
+Polygon -7500403 true true 195 90 240 150 225 180 165 105
+Polygon -7500403 true true 105 90 60 150 75 180 135 105
+
+plant
+false
+0
+Rectangle -7500403 true true 135 90 165 300
+Polygon -7500403 true true 135 255 90 210 45 195 75 255 135 285
+Polygon -7500403 true true 165 255 210 210 255 195 225 255 165 285
+Polygon -7500403 true true 135 180 90 135 45 120 75 180 135 210
+Polygon -7500403 true true 165 180 165 210 225 180 255 120 210 135
+Polygon -7500403 true true 135 105 90 60 45 45 75 105 135 135
+Polygon -7500403 true true 165 105 165 135 225 105 255 45 210 60
+Polygon -7500403 true true 135 90 120 45 150 15 180 45 165 90
+
+sheep
+false
+15
+Circle -1 true true 203 65 88
+Circle -1 true true 70 65 162
+Circle -1 true true 150 105 120
+Polygon -7500403 true false 218 120 240 165 255 165 278 120
+Circle -7500403 true false 214 72 67
+Rectangle -1 true true 164 223 179 298
+Polygon -1 true true 45 285 30 285 30 240 15 195 45 210
+Circle -1 true true 3 83 150
+Rectangle -1 true true 65 221 80 296
+Polygon -1 true true 195 285 210 285 210 240 240 210 195 210
+Polygon -7500403 true false 276 85 285 105 302 99 294 83
+Polygon -7500403 true false 219 85 210 105 193 99 201 83
+
+square
+false
+0
+Rectangle -7500403 true true 30 30 270 270
+
+square 2
+false
+0
+Rectangle -7500403 true true 30 30 270 270
+Rectangle -16777216 true false 60 60 240 240
+
+star
+false
+0
+Polygon -7500403 true true 151 1 185 108 298 108 207 175 242 282 151 216 59 282 94 175 3 108 116 108
+
+target
+false
+0
+Circle -7500403 true true 0 0 300
+Circle -16777216 true false 30 30 240
+Circle -7500403 true true 60 60 180
+Circle -16777216 true false 90 90 120
+Circle -7500403 true true 120 120 60
+
+tree
+false
+0
+Circle -7500403 true true 118 3 94
+Rectangle -6459832 true false 120 195 180 300
+Circle -7500403 true true 65 21 108
+Circle -7500403 true true 116 41 127
+Circle -7500403 true true 45 90 120
+Circle -7500403 true true 104 74 152
+
+triangle
+false
+0
+Polygon -7500403 true true 150 30 15 255 285 255
+
+triangle 2
+false
+0
+Polygon -7500403 true true 150 30 15 255 285 255
+Polygon -16777216 true false 151 99 225 223 75 224
+
+truck
+false
+0
+Rectangle -7500403 true true 4 45 195 187
+Polygon -7500403 true true 296 193 296 150 259 134 244 104 208 104 207 194
+Rectangle -1 true false 195 60 195 105
+Polygon -16777216 true false 238 112 252 141 219 141 218 112
+Circle -16777216 true false 234 174 42
+Rectangle -7500403 true true 181 185 214 194
+Circle -16777216 true false 144 174 42
+Circle -16777216 true false 24 174 42
+Circle -7500403 false true 24 174 42
+Circle -7500403 false true 144 174 42
+Circle -7500403 false true 234 174 42
+
+turtle
+true
+0
+Polygon -10899396 true false 215 204 240 233 246 254 228 266 215 252 193 210
+Polygon -10899396 true false 195 90 225 75 245 75 260 89 269 108 261 124 240 105 225 105 210 105
+Polygon -10899396 true false 105 90 75 75 55 75 40 89 31 108 39 124 60 105 75 105 90 105
+Polygon -10899396 true false 132 85 134 64 107 51 108 17 150 2 192 18 192 52 169 65 172 87
+Polygon -10899396 true false 85 204 60 233 54 254 72 266 85 252 107 210
+Polygon -7500403 true true 119 75 179 75 209 101 224 135 220 225 175 261 128 261 81 224 74 135 88 99
+
+wheel
+false
+0
+Circle -7500403 true true 3 3 294
+Circle -16777216 true false 30 30 240
+Line -7500403 true 150 285 150 15
+Line -7500403 true 15 150 285 150
+Circle -7500403 true true 120 120 60
+Line -7500403 true 216 40 79 269
+Line -7500403 true 40 84 269 221
+Line -7500403 true 40 216 269 79
+Line -7500403 true 84 40 221 269
+
+wolf
+false
+0
+Polygon -16777216 true false 253 133 245 131 245 133
+Polygon -7500403 true true 2 194 13 197 30 191 38 193 38 205 20 226 20 257 27 265 38 266 40 260 31 253 31 230 60 206 68 198 75 209 66 228 65 243 82 261 84 268 100 267 103 261 77 239 79 231 100 207 98 196 119 201 143 202 160 195 166 210 172 213 173 238 167 251 160 248 154 265 169 264 178 247 186 240 198 260 200 271 217 271 219 262 207 258 195 230 192 198 210 184 227 164 242 144 259 145 284 151 277 141 293 140 299 134 297 127 273 119 270 105
+Polygon -7500403 true true -1 195 14 180 36 166 40 153 53 140 82 131 134 133 159 126 188 115 227 108 236 102 238 98 268 86 269 92 281 87 269 103 269 113
+
+x
+false
+0
+Polygon -7500403 true true 270 75 225 30 30 225 75 270
+Polygon -7500403 true true 30 75 75 30 270 225 225 270
+@#$#@#$#@
+NetLogo 3D 6.4.0
+@#$#@#$#@
+need-to-manually-make-preview-for-this-model
+@#$#@#$#@
+@#$#@#$#@
+<experiments>
+  <experiment name="A0 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A0 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A1 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="5000"/>
+      <value value="10000"/>
+      <value value="20000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A1 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="5000"/>
+      <value value="10000"/>
+      <value value="20000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A2 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="2000"/>
+      <value value="5000"/>
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A2 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="2000"/>
+      <value value="5000"/>
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A3 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="2000"/>
+      <value value="3000"/>
+      <value value="5000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+      <value value="&quot;ext&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A3 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="2000"/>
+      <value value="3000"/>
+      <value value="5000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+      <value value="&quot;ext&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A4 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="5000"/>
+      <value value="10000"/>
+      <value value="20000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A4 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="5000"/>
+      <value value="10000"/>
+      <value value="20000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A5 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="5000"/>
+      <value value="10000"/>
+      <value value="20000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A5 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="5000"/>
+      <value value="10000"/>
+      <value value="20000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A6 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="5000"/>
+      <value value="10000"/>
+      <value value="20000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="5000"/>
+      <value value="10000"/>
+      <value value="20000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A6 - D0" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="5000"/>
+      <value value="10000"/>
+      <value value="20000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="310"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="500"/>
+      <value value="1000"/>
+      <value value="5000"/>
+      <value value="10000"/>
+      <value value="20000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A0 - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A0 - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A1 - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A1 - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A2 - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A2 - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A3a - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A3a - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A3b - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;ext&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A3b - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;ext&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A4 - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A4 - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A5 - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A5 - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="A6 - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>mean [soil_water_retention] of patches</metric>
+    <metric>vegetation</metric>
+    <metric>biodiversity</metric>
+    <metric>community</metric>
+    <metric>air</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="ES A6 - D1" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="7"/>
+    <metric>regulating</metric>
+    <metric>provisioning</metric>
+    <metric>cultural</metric>
+    <enumeratedValueSet variable="gr_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_facades">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pp_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="permeable_pavement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_canopy">
+      <value value="1.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_humidity">
+      <value value="0.32"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_savings">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="erosion_control">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="satisfaction_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="heatwave?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_roofs">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="hw_temperature">
+      <value value="303"/>
+      <value value="308"/>
+      <value value="312"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pollination">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="recreation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="ge_area">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bs_area">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="nutrient_cycling">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="raw_materials">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="cultural_use">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_formation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="genetic_resources">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bioswales">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="microclimate_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="NBS_attractiveness">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="green_enhancement">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="soil_temperature">
+      <value value="298"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="refugia">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gas_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="temperature_variation">
+      <value value="&quot;&lt;10&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gf_area">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="gr_type">
+      <value value="&quot;int&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="water_regulation">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="usage_level">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="reference_habit">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
+@#$#@#$#@
+@#$#@#$#@
+default
+0.0
+-0.2 0 0.0 1.0
+0.0 1 1.0 0.0
+0.2 0 0.0 1.0
+link direction
+true
+0
+Line -7500403 true 150 150 90 180
+Line -7500403 true 150 150 210 180
+@#$#@#$#@
+0
+@#$#@#$#@
